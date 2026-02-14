@@ -1,0 +1,937 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>诗刃 Poem Blade v3.0 - 深度博弈</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        'ink-bg': '#F5F5F5', // Rice Paper White
+                        'ink-panel': '#EBEBEB',
+                        'ink-light': '#2C2C2C', // Dark Ink for text
+                        'elem-gold': '#D4AF37', // Metallic Gold (Muted)
+                        'elem-wood': '#7FA99B', // Sage Green (Morandi)
+                        'elem-water': '#6B8EAD', // Steel Blue (Morandi)
+                        'elem-fire': '#C06C5D', // Terracotta (Morandi)
+                        'elem-earth': '#8D7B68', // Taupe (Morandi)
+                        'bar-p': '#5D8AA8', // Player HP (Air Force Blue)
+                        'bar-ai': '#CD5C5C', // AI HP (Indian Red)
+                    },
+                    fontFamily: {
+                        serif: ['"STKaiti"', '"KaiTi"', '"楷体"', 'serif'],
+                    },
+                    animation: {
+                        'shake': 'shake 0.5s cubic-bezier(.36,.07,.19,.97) both',
+                        'pop': 'pop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards',
+                        'float': 'float 3s ease-in-out infinite',
+                        'scroll': 'scroll 15s linear infinite',
+                        'ink-spread': 'inkSpread 1s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards',
+                        'scroll-open': 'scrollOpen 0.8s ease-out forwards',
+                        'breath-p': 'breathP 2s ease-in-out infinite',
+                        'breath-ai': 'breathAi 2s ease-in-out infinite',
+                    },
+                    keyframes: {
+                        breathP: {
+                            '0%, 100%': { boxShadow: '0 0 5px #5D8AA8, 0 0 10px #5D8AA8', filter: 'brightness(1)' },
+                            '50%': { boxShadow: '0 0 20px #5D8AA8, 0 0 10px #fff', filter: 'brightness(1.3)' }
+                        },
+                        breathAi: {
+                            '0%, 100%': { boxShadow: '0 0 5px #CD5C5C, 0 0 10px #CD5C5C', filter: 'brightness(1)' },
+                            '50%': { boxShadow: '0 0 20px #CD5C5C, 0 0 10px #fff', filter: 'brightness(1.3)' }
+                        },
+                        shimmer: {
+                            '0%': { backgroundPosition: '-200% 0' },
+                            '100%': { backgroundPosition: '200% 0' }
+                        },
+                        shake: {
+                            '10%, 90%': { transform: 'translate3d(-1px, 0, 0)' },
+                            '20%, 80%': { transform: 'translate3d(2px, 0, 0)' },
+                            '30%, 50%, 70%': { transform: 'translate3d(-4px, 0, 0)' },
+                            '40%, 60%': { transform: 'translate3d(4px, 0, 0)' }
+                        },
+                        pop: {
+                            '0%': { opacity: '0', transform: 'scale(0.5)' },
+                            '100%': { opacity: '1', transform: 'scale(1)' },
+                        },
+                        float: {
+                            '0%, 100%': { transform: 'translateY(0)' },
+                            '50%': { transform: 'translateY(-5px)' },
+                        },
+                        scroll: {
+                            '0%': { transform: 'translateX(100%)' },
+                            '100%': { transform: 'translateX(-100%)' },
+                        },
+                        inkSpread: {
+                            '0%': { transform: 'scale(2)', opacity: '0', filter: 'blur(4px)' },
+                            '20%': { transform: 'scale(1)', opacity: '1', filter: 'blur(0)' },
+                            '80%': { transform: 'scale(0.95)', opacity: '0.8' },
+                            '100%': { transform: 'scale(1.2)', opacity: '0', filter: 'blur(2px)' }
+                        },
+                        scrollOpen: {
+                            '0%': { height: '0', opacity: '0', transform: 'scaleY(0)' },
+                            '100%': { height: '100%', opacity: '1', transform: 'scaleY(1)' }
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@700&display=swap');
+        
+        body {
+            font-family: "FangSong", "STFangsong", "华文仿宋", "Noto Serif SC", "STKaiti", "KaiTi", "楷体", serif;
+            overscroll-behavior: none;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: manipulation;
+            height: 100dvh;
+            background-color: #F5F5F5;
+            color: #2C2C2C;
+        }
+        
+        /* Domain Background Gradient Transition */
+        #domain-bg {
+            transition: background 1.0s ease;
+        }
+
+        .word-cell {
+            touch-action: manipulation;
+            -webkit-tap-highlight-color: transparent;
+            font-family: "FangSong", "STFangsong", "华文仿宋", "Noto Serif SC", "STKaiti", "KaiTi", "楷体", serif;
+            box-shadow: inset 0 0 10px rgba(0,0,0,0.05);
+            font-weight: 700; /* Bold */
+            text-shadow: 0 0 1px rgba(0,0,0,0.1); /* Slight stroke effect for clarity */
+        }
+
+        .word-cell.locked-ai {
+            animation: shake 0.6s infinite;
+            border-color: #C06C5D !important;
+            box-shadow: 0 0 15px #C06C5D, 0 0 5px #fff;
+            background-color: rgba(192, 108, 93, 0.2) !important;
+        }
+
+        /* Neon Click Effect */
+        .neon-click {
+            animation: neonPulse 0.4s ease-out forwards;
+        }
+
+        @keyframes neonPulse {
+            0% { box-shadow: 0 0 5px #fff, 0 0 10px #5D8AA8; transform: scale(0.95); }
+            50% { box-shadow: 0 0 20px #5D8AA8, 0 0 40px #5D8AA8; transform: scale(1.05); }
+            100% { box-shadow: 0 0 5px #5D8AA8; transform: scale(1); }
+        }
+
+        .bar-shimmer {
+            background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.6) 50%, transparent 100%);
+            background-size: 200% 100%;
+            animation: shimmer 2s infinite linear;
+        }
+        
+        .bg-dynamic-black {
+            background: linear-gradient(135deg, #0d0d0d 0%, #1f1f1f 50%, #0d0d0d 100%);
+            background-size: 200% 200%;
+            animation: float 10s ease infinite;
+        }
+    </style>
+</head>
+<body class="bg-[#F5F5F5] text-ink-light h-full w-full overflow-hidden flex justify-center items-center">
+
+    <!-- Game Container (Mobile Viewport Simulator) -->
+    <div class="relative w-full h-full max-w-[500px] bg-[#F5F5F5] shadow-2xl overflow-hidden flex flex-col mx-auto" style="height: 100dvh;">
+
+        <!-- Layer 0: Dynamic Background -->
+        <div id="domain-bg" class="absolute inset-0 z-0 bg-gradient-to-br from-[#E0E0E0] to-[#F5F5F5]"></div>
+
+        <!-- Controls -->
+        <div class="absolute top-4 right-4 flex gap-2 z-30">
+            <button onclick="Game.openPoems()" class="p-2 rounded-full bg-white/80 backdrop-blur-sm shadow-sm hover:bg-white transition-colors border border-gray-200">
+                <svg class="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"></path></svg>
+            </button>
+            <button onclick="document.getElementById('modal-rules').classList.remove('hidden')" class="p-2 rounded-full bg-white/80 backdrop-blur-sm shadow-sm hover:bg-white transition-colors border border-gray-200">
+                <svg class="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+            </button>
+        </div>
+
+        <!-- Layer 1: UI Overlay -->
+        <!-- Top: Info & Ticker -->
+        <div class="relative z-10 w-full pt-safe-top shrink-0">
+        <!-- Ticker -->
+        <div class="bg-white/60 border-b border-gray-300 overflow-hidden h-8 flex items-center backdrop-blur-sm">
+            <div id="hint-ticker" class="whitespace-nowrap text-xs text-gray-600 animate-scroll pl-4 font-bold">
+                诗刃v3.0 - 正在初始化...
+            </div>
+        </div>
+
+        <!-- HP Bars -->
+        <div class="px-4 py-2 flex gap-4 items-center">
+            <!-- Player -->
+            <div class="flex-1">
+                <div class="flex justify-between text-xs mb-1 text-bar-p font-bold">
+                    <span>侠客</span>
+                    <span id="hp-val-p">1000</span>
+                </div>
+                <div class="h-3 bg-gray-200 rounded-full overflow-hidden shadow-inner border border-white/50 relative">
+                    <div id="hp-bar-p" class="h-full bg-bar-p transition-all duration-300 animate-breath-p relative overflow-hidden" style="width: 100%">
+                        <div class="absolute inset-0 bar-shimmer"></div>
+                    </div>
+                </div>
+            </div>
+            <!-- VS -->
+            <div class="text-gray-400 font-serif italic text-lg opacity-50">VS</div>
+            <!-- AI -->
+            <div class="flex-1 text-right">
+                <div class="flex justify-between text-xs mb-1 text-bar-ai font-bold">
+                    <span id="hp-val-ai">1000</span>
+                    <span>心魔</span>
+                </div>
+                <div class="h-3 bg-gray-200 rounded-full overflow-hidden shadow-inner border border-white/50 relative">
+                    <div id="hp-bar-ai" class="h-full bg-bar-ai transition-all duration-300 animate-breath-ai relative overflow-hidden" style="width: 100%">
+                        <div class="absolute inset-0 bar-shimmer"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Score Board -->
+        <div class="px-4 flex justify-between text-xs text-gray-500 font-bold">
+            <span id="round-info">第 1 轮</span>
+            <span id="history-info">胜: 0 | 负: 0</span>
+        </div>
+    </div>
+
+    <!-- Middle: Battle Area (Flexible Space) -->
+    <div class="flex-1 relative z-10 flex flex-col items-center justify-center p-2 min-h-0">
+        
+        <!-- Floating Attribute Indicator -->
+        <div id="attr-float" class="absolute left-2 top-10 opacity-0 transition-opacity duration-300 bg-white/80 backdrop-blur p-1 rounded-lg border border-gray-300 shadow-sm flex flex-col items-center gap-0.5 z-20">
+            <div id="attr-icon" class="w-6 h-6 rounded-full bg-gray-500 shadow-md"></div>
+            <span id="attr-name" class="text-[10px] font-bold text-gray-700">无</span>
+        </div>
+
+        <!-- AI Sequence Slot -->
+        <div class="w-full mb-1 relative flex justify-end shrink-0">
+            <div class="flex flex-col items-end w-full">
+                <div class="flex justify-between w-full text-xs text-gray-500 mb-0.5 px-2">
+                    <span id="ai-status" class="text-elem-fire opacity-0 transition-opacity text-[10px] font-bold">吟唱中...</span>
+                    <span class="text-[10px] opacity-70">心魔剑意</span>
+                </div>
+                <div id="ai-seq" class="h-8 border-b border-gray-300 flex items-center justify-end gap-1 px-2 w-full">
+                    <!-- AI Tiles -->
+                </div>
+            </div>
+        </div>
+
+        <!-- Player Sequence Slot -->
+        <div class="w-full mb-2 relative shrink-0">
+            <div class="flex justify-between text-xs text-gray-500 mb-1 px-2">
+                <span class="text-[10px] opacity-70">我的剑意</span>
+                <span id="seq-preview" class="opacity-0 transition-opacity text-elem-gold text-[10px] font-bold"></span>
+            </div>
+            <div id="player-seq" class="h-12 border-b-2 border-gray-400 flex items-center gap-1 px-2 overflow-x-auto transition-colors duration-300 bg-white/30 rounded-t">
+                <span class="text-gray-400 italic text-xs">点击字块拼凑诗句...</span>
+            </div>
+        </div>
+
+        <!-- Toast/Feedback -->
+        <div id="toast" class="absolute top-4 pointer-events-none opacity-0 transition-all duration-300 transform scale-90 text-xl font-bold text-ink-light drop-shadow-md z-50 bg-white/90 px-4 py-2 rounded-full shadow-lg border border-gray-200"></div>
+    </div>
+
+    <!-- Bottom: Grid (Takes remaining space but respects aspect ratio) -->
+    <div class="relative z-20 bg-[#EBEBEB]/90 backdrop-blur-xl rounded-t-3xl shadow-[0_-5px_20px_rgba(0,0,0,0.05)] p-4 pb-safe-bottom border-t border-white/40 shrink-0 flex flex-col items-center">
+        <div class="flex justify-between items-center mb-3 w-full max-w-[90vw]">
+            <span id="theme-tag" class="text-[10px] px-3 py-1 rounded-full bg-white text-gray-500 shadow-sm border border-gray-100 font-bold tracking-wide">主题: ---</span>
+            <button onclick="Game.cast()" class="px-6 py-2 bg-gradient-to-r from-gray-700 to-gray-900 text-white font-bold rounded-full shadow-lg active:scale-95 transition-transform text-sm tracking-widest border border-gray-600">
+                斩
+            </button>
+        </div>
+
+        <!-- Grid Container: Max width 90vw, Max height 50vh (to prevent overflow) -->
+        <div class="w-full max-w-[90vw] aspect-square relative" style="max-height: 45vh;">
+            <div id="grid" class="grid grid-cols-6 gap-1.5 w-full h-full p-1">
+                <!-- Generated by JS -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Game Rules Modal -->
+    <div id="modal-rules" class="absolute inset-0 z-50 bg-dynamic-black flex flex-col items-center justify-center p-6 text-center text-white">
+        <!-- Floating Dust Particles -->
+        <div class="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/stardust.png')] opacity-30 animate-pulse"></div>
+        
+        <h1 class="text-5xl font-bold mb-8 text-white tracking-[0.2em] drop-shadow-[0_0_15px_rgba(255,255,255,0.5)] font-serif z-10">诗刃·对决</h1>
+        
+        <div class="bg-white/10 rounded-xl p-6 max-w-sm text-left mb-10 backdrop-blur-md text-sm leading-relaxed text-gray-200 border border-white/20 shadow-2xl z-10 relative overflow-hidden">
+            <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-white/50 to-transparent"></div>
+            
+            <p class="mb-4 flex items-start gap-2">
+                <span class="text-elem-gold font-bold text-lg">🗡️</span>
+                <span><span class="font-bold text-white">拼字为剑</span>：点击字块，拼凑完整诗句（5或7字）造成伤害。</span>
+            </p>
+            <p class="mb-4 flex items-start gap-2">
+                <span class="text-elem-fire font-bold text-lg">🔥</span>
+                <span><span class="font-bold text-white">唯快不破</span>：双方共享字池。先手拼成，本轮即止。</span>
+            </p>
+            <p class="mb-4 flex items-start gap-2">
+                <span class="text-elem-water font-bold text-lg">⚡</span>
+                <span><span class="font-bold text-white">截胡心魔</span>：当心魔字块<span class="text-elem-fire font-bold animate-pulse">发红</span>时，抢先点击可打断吟唱。</span>
+            </p>
+        </div>
+
+        <button onclick="Game.closeRules()" class="z-10 px-12 py-4 bg-white text-black font-bold rounded-full text-xl shadow-[0_0_20px_rgba(255,255,255,0.3)] animate-pulse hover:scale-105 active:scale-95 transition-all tracking-widest border-2 border-transparent hover:border-white/50">
+            拔剑入局
+        </button>
+    </div>
+
+    <!-- Poem Book Modal -->
+    <div id="modal-poems" class="fixed inset-0 z-50 bg-black/50 backdrop-blur-sm hidden flex items-center justify-center p-4">
+        <div class="bg-white/95 rounded-xl shadow-2xl w-full max-w-md max-h-[80vh] flex flex-col overflow-hidden border border-gray-200">
+            <div class="p-6 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+                <h2 class="text-2xl font-bold text-ink-light">诗词典籍</h2>
+                <button onclick="Game.closePoems()" class="text-gray-400 hover:text-gray-600 transition-colors">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            <div class="p-6 overflow-y-auto space-y-6" id="poem-list-content">
+                <!-- Dynamically filled -->
+            </div>
+        </div>
+    </div>
+
+    <!-- End Screen Modal -->
+    <div id="modal-end" class="fixed inset-0 z-50 bg-white/95 flex flex-col items-center justify-center hidden opacity-0 transition-opacity duration-500">
+        <h2 id="end-title" class="text-6xl font-bold mb-4 text-ink-light">胜</h2>
+        <div class="w-full max-w-xs bg-gray-100 rounded-xl p-6 border border-gray-200 mb-8 shadow-sm">
+            <div class="flex justify-between text-gray-500 mb-2 font-bold"><span>总轮数</span><span id="end-rounds" class="text-ink-light">0</span></div>
+            <div class="flex justify-between text-gray-500 font-bold"><span>最高连击</span><span id="end-combo" class="text-ink-light">0</span></div>
+        </div>
+        <button onclick="Game.resetGame()" class="px-8 py-3 border border-gray-300 bg-white rounded-full text-xl hover:bg-gray-50 active:scale-95 transition-all text-gray-800 font-bold shadow-md">
+            再战一回
+        </button>
+    </div>
+
+    <script>
+        // --- Data: Themed Libraries ---
+        const ELEMENTS = {
+            GOLD: { name: '金', color: '#F2BE45', weak: 'FIRE' },
+            WOOD: { name: '木', color: '#40E0D0', weak: 'GOLD' },
+            EARTH: { name: '土', color: '#8B4513', weak: 'WOOD' },
+            WATER: { name: '水', color: '#177CB0', weak: 'EARTH' },
+            FIRE: { name: '火', color: '#C21F30', weak: 'WATER' }
+        };
+
+        const THEMES = [
+            {
+                id: 'LEGEND',
+                name: '千古绝唱',
+                poems: [
+                    // --- FIRE (Burst) ---
+                    { text: "野火烧不尽", element: "FIRE", power: 160 },
+                    { text: "日出江花红胜火", element: "FIRE", power: 170 },
+                    { text: "霜叶红于二月花", element: "FIRE", power: 170 },
+                    { text: "烽火连三月", element: "FIRE", power: 180 },
+
+                    // --- WATER (Control) ---
+                    { text: "海上升明月", element: "WATER", power: 140 },
+                    { text: "长河落日圆", element: "WATER", power: 140 },
+                    { text: "桃花潭水深千尺", element: "WATER", power: 160 },
+                    { text: "一江春水向东流", element: "WATER", power: 160 },
+
+                    // --- WOOD (Sustain) ---
+                    { text: "处处闻啼鸟", element: "WOOD", power: 130 },
+                    { text: "绿树村边合", element: "WOOD", power: 140 },
+                    { text: "无边落木萧萧下", element: "WOOD", power: 160 },
+                    { text: "春风又绿江南岸", element: "WOOD", power: 150 },
+                    { text: "万条垂下绿丝绦", element: "WOOD", power: 150 },
+
+                    // --- GOLD (Execute) ---
+                    { text: "一剑霜寒十四州", element: "GOLD", power: 190 },
+                    { text: "满堂花醉三千客", element: "GOLD", power: 180 },
+                    { text: "铁马冰河入梦来", element: "GOLD", power: 180 },
+                    { text: "黄沙百战穿金甲", element: "GOLD", power: 185 },
+                    { text: "不破楼兰终不还", element: "GOLD", power: 190 },
+
+                    // --- EARTH (Shield) ---
+                    { text: "大漠孤烟直", element: "EARTH", power: 140 },
+                    { text: "只有敬亭山", element: "EARTH", power: 130 }, // Fixed: "相看两不厌" is the famous line, but "只有敬亭山" is the end. Let's use "相看两不厌" for better recognition? No, "只有敬亭山" is 5 chars. "相看两不厌" is 5. "只有敬亭山" is correct.
+                    { text: "相看两不厌", element: "EARTH", power: 135 }, // Adding the preceding line as it's iconic
+                    { text: "白日依山尽", element: "EARTH", power: 130 },
+                    { text: "横看成岭侧成峰", element: "EARTH", power: 150 }
+                ]
+            }
+        ];
+
+        // --- Game State ---
+        const State = {
+            playerHP: 1000,
+            aiHP: 1000,
+            maxHP: 1000,
+            round: 1,
+            history: { wins: 0, losses: 0 },
+            
+            currentTheme: null,
+            wordPool: [], // { id, char, owner, lockedByAiUntil }
+            
+            playerSeq: [],
+            aiSeq: [],
+            
+            aiState: 'IDLE', // IDLE, OBSERVING, LOCKING
+            aiTargetPoem: null,
+            aiNextChar: null,
+            
+            isGameOver: false,
+            isPaused: true // Start paused for rules/countdown
+        };
+
+        // --- Core Logic ---
+        const Game = {
+            init() {
+                // Load history
+                const saved = localStorage.getItem('ink_blade_history');
+                if (saved) State.history = JSON.parse(saved);
+                this.updateHistoryUI();
+                
+                // Don't start AI or logic yet, wait for rules close
+            },
+
+            closeRules() {
+                const rules = document.getElementById('modal-rules');
+                rules.classList.add('opacity-0');
+                setTimeout(() => {
+                    rules.classList.add('hidden');
+                    rules.classList.remove('opacity-0');
+                    if(State.isPaused && State.round === 1) {
+                        // Start first round
+                        this.showRoundTransition();
+                        this.aiLoop();
+                    }
+                }, 300);
+            },
+
+            openPoems() {
+                const modal = document.getElementById('modal-poems');
+                const content = document.getElementById('poem-list-content');
+                
+                // Group by Element
+                const grouped = {};
+                State.currentTheme.poems.forEach(p => {
+                    if (!grouped[p.element]) grouped[p.element] = [];
+                    grouped[p.element].push(p);
+                });
+                
+                let html = "";
+                Object.keys(ELEMENTS).forEach(elKey => {
+                    if (grouped[elKey]) {
+                        const elInfo = ELEMENTS[elKey];
+                        html += `
+                            <div>
+                                <h3 class="font-bold text-lg mb-2 flex items-center gap-2" style="color:${elInfo.color}">
+                                    <span class="w-6 h-6 rounded flex items-center justify-center text-white text-sm" style="background:${elInfo.color}">${elInfo.name}</span>
+                                    ${elInfo.name}属性
+                                </h3>
+                                <div class="grid grid-cols-1 gap-2">
+                                    ${grouped[elKey].map(p => `
+                                        <div class="bg-gray-50 p-3 rounded border border-gray-100 flex justify-between items-center">
+                                            <span class="font-serif text-lg text-gray-700">${p.text}</span>
+                                            <span class="text-xs font-bold text-gray-400">威力 ${p.power}</span>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            </div>
+                        `;
+                    }
+                });
+                
+                content.innerHTML = html;
+                modal.classList.remove('hidden');
+            },
+
+            closePoems() {
+                document.getElementById('modal-poems').classList.add('hidden');
+            },
+
+            resetGame() {
+                State.playerHP = 1000;
+                State.aiHP = 1000;
+                State.round = 1;
+                State.isGameOver = false;
+                
+                document.getElementById('modal-end').classList.add('hidden');
+                document.getElementById('modal-end').classList.remove('flex');
+                document.getElementById('modal-end').style.opacity = 0;
+                
+                this.resetRound();
+            },
+
+            resetRound() {
+                if (State.isGameOver) return;
+
+                // 1. Pick Theme
+                const themeIdx = Math.floor(Math.random() * THEMES.length);
+                State.currentTheme = THEMES[themeIdx];
+                document.getElementById('theme-tag').innerText = `主题: ${State.currentTheme.name}`;
+
+                // 2. Generate Word Pool
+                // MUST HAVE: At least 2 full poems that DO NOT SHARE characters
+                const allPoems = [...State.currentTheme.poems];
+                
+                // Shuffle all poems to ensure randomness
+                allPoems.sort(() => Math.random() - 0.5);
+                
+                let selectedPoems = [];
+                
+                // Try to find a pair of disjoint poems
+                let pairFound = false;
+                
+                for (let i = 0; i < allPoems.length; i++) {
+                    const p1 = allPoems[i];
+                    const p1Chars = new Set(p1.text.split(''));
+                    
+                    for (let j = i + 1; j < allPoems.length; j++) {
+                        const p2 = allPoems[j];
+                        const p2Chars = p2.text.split('');
+                        
+                        // Check if p2 has any character in p1
+                        const hasOverlap = p2Chars.some(c => p1Chars.has(c));
+                        
+                        if (!hasOverlap) {
+                            selectedPoems = [p1, p2];
+                            pairFound = true;
+                            break;
+                        }
+                    }
+                    if (pairFound) break;
+                }
+                
+                // Fallback: If no disjoint pair found, pick top 2
+                if (!pairFound && allPoems.length >= 2) {
+                     console.warn("Could not find perfectly disjoint pair, falling back to random selection");
+                     selectedPoems = [allPoems[0], allPoems[1]];
+                }
+
+                // Remove selected poems from allPoems so downstream logic (disturbers) works correctly
+                selectedPoems.forEach(p => {
+                    const idx = allPoems.indexOf(p);
+                    if (idx > -1) allPoems.splice(idx, 1);
+                });
+
+                // Add characters from selected poems
+                let pool = [];
+                selectedPoems.forEach(poem => {
+                    pool.push(...poem.text.split(''));
+                });
+
+                // Track existing characters to avoid unnecessary duplicates in disturbers
+                const existingChars = new Set(pool);
+
+                // Fill remaining slots (Total 36 for 6x6)
+                const remainingSlots = 36 - pool.length;
+                
+                // Disturbers: Use characters from remaining poems in the theme to ensure style consistency
+                // allPoems now contains only the poems that were NOT selected as guaranteed targets
+                let disturberSource = "";
+                if (allPoems.length > 0) {
+                    allPoems.forEach(p => disturberSource += p.text);
+                }
+                // Fallback disturbers if needed
+                const fallback = "风花雪月剑影刀光江湖恩怨情仇天地玄黄宇宙洪荒日月盈昃辰宿列张寒来暑往秋收冬藏";
+                disturberSource += fallback;
+                
+                // Create a unique set of candidate disturbers that are NOT in the current poems
+                const candidateDisturbers = [...new Set(disturberSource.split(''))]
+                    .filter(c => !existingChars.has(c));
+                
+                // Shuffle candidates
+                candidateDisturbers.sort(() => Math.random() - 0.5);
+
+                for (let i = 0; i < remainingSlots; i++) {
+                    // Use a unique candidate if available, otherwise reuse random fallback (should rarely happen)
+                    if (i < candidateDisturbers.length) {
+                        pool.push(candidateDisturbers[i]);
+                    } else {
+                        pool.push(fallback[Math.floor(Math.random() * fallback.length)]);
+                    }
+                }
+
+                // Shuffle Pool
+                pool = pool.sort(() => Math.random() - 0.5);
+
+                State.wordPool = pool.map((char, index) => ({
+                    id: index,
+                    char: char,
+                    owner: null, // null, 'player', 'ai'
+                    lockedByAiUntil: 0
+                }));
+
+                // 3. Reset Sequences
+                State.playerSeq = [];
+                State.aiSeq = [];
+                State.aiTargetPoem = null;
+                State.aiState = 'IDLE';
+                
+                // Store the guaranteed poems in State for AI to use intelligently
+                State.activePoems = selectedPoems;
+
+                // 4. Update UI
+                this.renderGrid();
+                this.renderPlayerSeq();
+                this.renderAiSeq();
+                this.updateBars();
+                this.updateTicker();
+                document.getElementById('round-info').innerText = `第 ${State.round} 轮`;
+
+                // 5. Increase Difficulty
+                State.round++;
+            },
+
+            async showRoundTransition() {
+                // Overlay for round transition
+                this.showToast("下一轮", "#F2BE45");
+                await this.sleep(1000);
+                this.resetRound();
+                State.isPaused = false;
+            },
+
+            updateTicker() {
+                // Find a recommended element (e.g., strong against current AI dominant or just random)
+                const rec = State.currentTheme.poems[Math.floor(Math.random() * State.currentTheme.poems.length)];
+                const msg = `本轮推荐：拼凑【${ELEMENTS[rec.element].name}】属性诗句，可造成 ${rec.power} 点伤害！`;
+                document.getElementById('hint-ticker').innerText = msg;
+            },
+
+            updateHistoryUI() {
+                document.getElementById('history-info').innerText = `胜: ${State.history.wins} | 负: ${State.history.losses}`;
+            },
+
+            // --- Interaction ---
+            clickTile(id) {
+                console.log("Clicked tile:", id, "Paused:", State.isPaused, "GameOver:", State.isGameOver);
+                
+                if (State.isGameOver) return;
+                if (State.isPaused) {
+                    // Optional: Feedback if clicking during countdown
+                    // this.showToast("...", "#999");
+                    return;
+                }
+                
+                const tile = State.wordPool.find(t => t.id === id);
+                if (!tile || tile.owner) return;
+
+                // Player takes it
+                tile.owner = 'player';
+                State.playerSeq.push(tile);
+                
+                // Check if we interrupted AI
+                if (State.aiState === 'LOCKING' && State.aiNextChar && tile.char === State.aiNextChar) {
+                    this.showToast("⚡️ 截胡!", "#F2BE45");
+                    if (navigator.vibrate) navigator.vibrate([50, 50]);
+                    this.aiInterrupt();
+                }
+
+                this.renderGrid();
+                this.renderPlayerSeq();
+                this.checkPreview();
+            },
+
+            cast() {
+                const text = State.playerSeq.map(t => t.char).join('');
+                const poem = State.currentTheme.poems.find(p => p.text === text);
+
+                if (poem) {
+                    this.resolveCombat(poem, 'player');
+                } else {
+                    this.showToast("不成句...", "#999");
+                    this.resetPlayerSeq();
+                }
+            },
+
+            resetPlayerSeq() {
+                State.playerSeq.forEach(t => {
+                    const tile = State.wordPool.find(x => x.id === t.id);
+                    if(tile) tile.owner = null;
+                });
+                State.playerSeq = [];
+                this.renderGrid();
+                this.renderPlayerSeq();
+                this.checkPreview();
+            },
+
+            resolveCombat(poem, attacker) {
+                let damage = poem.power;
+                // Add Round Scaling
+                damage += (State.round * 5);
+
+                if (attacker === 'player') {
+                    State.aiHP = Math.max(0, State.aiHP - damage);
+                    this.showToast(`-${damage} (你)`, ELEMENTS[poem.element].color);
+                } else {
+                    State.playerHP = Math.max(0, State.playerHP - damage);
+                    this.showToast(`-${damage} (敌)`, "#C21F30");
+                }
+
+                this.updateBars();
+
+                if (State.playerHP <= 0 || State.aiHP <= 0) {
+                    this.endGame();
+                } else {
+                    // Round Over -> Reset
+                    this.showRoundTransition();
+                }
+            },
+
+            endGame() {
+                State.isGameOver = true;
+                const win = State.aiHP <= 0;
+                
+                if (win) State.history.wins++;
+                else State.history.losses++;
+                localStorage.setItem('ink_blade_history', JSON.stringify(State.history));
+                
+                const modal = document.getElementById('modal-end');
+                const title = document.getElementById('end-title');
+                
+                title.innerText = win ? "大 胜" : "惜 败";
+                title.className = `text-6xl font-bold mb-4 ${win ? 'text-elem-gold' : 'text-gray-500'}`;
+                
+                document.getElementById('end-rounds').innerText = State.round;
+                
+                modal.classList.remove('hidden');
+                modal.classList.add('flex');
+                setTimeout(() => modal.style.opacity = 1, 50);
+            },
+
+            // --- Async AI ---
+            async aiLoop() {
+                while (true) {
+                    if (State.isGameOver || State.isPaused) {
+                        await this.sleep(100);
+                        continue;
+                    }
+
+                    // Dynamic Difficulty: Slower for easier gameplay
+                    // Update: Slowed down AI reaction speed as requested
+                    // Was: 1200-2000ms -> Now: 2500-3500ms
+                    const obsTime = Math.random() * (3500 - 2500) + 2500;
+                    
+                    // 1. Observe
+                    State.aiState = 'OBSERVING';
+                    await this.sleep(obsTime);
+
+                    // 2. Decide
+                    if (!State.aiTargetPoem) {
+                        // AI Logic: Prioritize poems that are actually on the board (activePoems)
+                        const availablePoems = State.activePoems || State.currentTheme.poems;
+                        const poem = availablePoems[Math.floor(Math.random() * availablePoems.length)];
+                        State.aiTargetPoem = poem;
+                    }
+
+                    // Find next needed char
+                    const currentLen = State.aiSeq.length;
+                    if (currentLen >= State.aiTargetPoem.text.length) {
+                        // Cast
+                        this.resolveCombat(State.aiTargetPoem, 'ai');
+                        await this.sleep(2000); // Wait for round reset
+                        continue;
+                    }
+
+                    const nextChar = State.aiTargetPoem.text[currentLen];
+                    State.aiNextChar = nextChar;
+
+                    // Find tile
+                    const tile = State.wordPool.find(t => t.char === nextChar && !t.owner);
+
+                    if (tile) {
+                        // 3. Lock / Warn
+                        State.aiState = 'LOCKING';
+                        tile.lockedByAiUntil = Date.now() + 1500; // Lock for 1.5s
+                        this.renderGrid(); // Shows shake effect
+
+                        await this.sleep(1000); // Reaction time
+
+                        // 4. Act
+                        // Check if still available (not stolen)
+                        const freshTile = State.wordPool.find(t => t.id === tile.id);
+                        if (freshTile && !freshTile.owner) {
+                            freshTile.owner = 'ai';
+                            freshTile.lockedByAiUntil = 0;
+                            State.aiSeq.push(freshTile);
+                            this.renderGrid();
+                            this.renderAiSeq();
+                            // Small pause between characters
+                            await this.sleep(600);
+                        } else {
+                            // Stolen!
+                            this.showToast("被截胡！", "#7FA99B");
+                            this.aiInterrupt();
+                        }
+                    } else {
+                        // Cant find char -> Reset target
+                        State.aiTargetPoem = null;
+                        State.aiSeq.forEach(t => t.owner = null);
+                        State.aiSeq = [];
+                        this.renderGrid();
+                        this.renderAiSeq();
+                    }
+                }
+            },
+
+            aiInterrupt() {
+                State.aiState = 'IDLE';
+                State.aiTargetPoem = null;
+                State.aiSeq.forEach(t => {
+                    const tile = State.wordPool.find(x => x.id === t.id);
+                    if(tile) tile.owner = null;
+                });
+                State.aiSeq = [];
+                this.renderGrid();
+                this.renderAiSeq();
+                // AI gets confused
+                this.showToast("心魔乱了阵脚!", "#fff");
+            },
+
+            sleep(ms) {
+                return new Promise(resolve => setTimeout(resolve, ms));
+            },
+
+            // --- Renderers ---
+            renderGrid() {
+        const el = document.getElementById('grid');
+        el.innerHTML = State.wordPool.map(t => {
+            // Base style: Dark text on light paper background, Bold for visibility
+            let base = "word-cell relative rounded-lg flex items-center justify-center text-xl md:text-2xl font-extrabold shadow-sm transition-all duration-200 border border-gray-300 select-none cursor-pointer w-full h-full aspect-square tracking-wider";
+            let stateClass = "";
+            
+            if (t.owner === 'player') {
+                // Player Owned: Deep Blue Background, White Text
+                // Added z-20 to ensure it floats ABOVE other elements
+                // Added !important to force background color
+                // Added neon-click for visual feedback
+                stateClass = "bg-bar-p text-white scale-105 border-bar-p shadow-[0_0_10px_#5D8AA8] z-20 pointer-events-none neon-click";
+            } else if (t.owner === 'ai') {
+                // AI Owned: Deep Red Background, White Text
+                stateClass = "bg-bar-ai text-white scale-95 opacity-80 pointer-events-none z-10";
+            } else if (t.lockedByAiUntil > Date.now()) {
+                // AI Locking: Red Outline, Red Tint
+                stateClass = "locked-ai text-elem-fire bg-red-50";
+            } else {
+                // Idle: White Paper-like background, Dark Ink Text
+                stateClass = "bg-white text-gray-900 hover:bg-gray-50 active:bg-gray-200 active:scale-95";
+            }
+            
+            // Inline styles for absolute safety
+            // Fix: Explicitly set background color for claimed tiles to avoid CSS overriding issues
+            // Update: Increased transparency (lower alpha) for "Rice Paper Wash" effect
+            let inlineStyle = "";
+            if (t.owner === 'player') inlineStyle = "background-color: rgba(93, 138, 168, 0.6); color: white;";
+            else if (t.owner === 'ai') inlineStyle = "background-color: rgba(205, 92, 92, 0.6); color: white;";
+            else inlineStyle = "background-color: rgba(255, 255, 255, 0.6); color: #2C2C2C;";
+            
+            return `<div class="${base} ${stateClass}" onclick="Game.clickTile(${t.id})" style="${inlineStyle}">${t.char || '?'}</div>`;
+        }).join('');
+    },
+
+            renderPlayerSeq() {
+                const el = document.getElementById('player-seq');
+                if (State.playerSeq.length === 0) {
+                    el.innerHTML = '<span class="text-gray-600 italic text-sm">点击字块拼凑诗句...</span>';
+                    return;
+                }
+                el.innerHTML = State.playerSeq.map(t => 
+                    `<div class="w-10 h-10 rounded bg-elem-water text-white flex items-center justify-center font-bold shadow animate-pop">${t.char}</div>`
+                ).join('');
+            },
+
+            renderAiSeq() {
+                const el = document.getElementById('ai-seq');
+                const status = document.getElementById('ai-status');
+                
+                if (State.aiSeq.length === 0) {
+                    el.innerHTML = '';
+                    status.style.opacity = (State.aiState === 'LOCKING' || State.aiState === 'OBSERVING') ? 1 : 0;
+                    status.innerText = State.aiState === 'LOCKING' ? "锁定中..." : "吟唱中...";
+                    return;
+                }
+                
+                status.style.opacity = 1;
+                status.innerText = "构建中...";
+
+                el.innerHTML = State.aiSeq.map(t => 
+                    `<div class="w-8 h-8 rounded bg-elem-fire text-white flex items-center justify-center font-bold shadow animate-pop text-sm">${t.char}</div>`
+                ).join('');
+            },
+
+            checkPreview() {
+                const text = State.playerSeq.map(t => t.char).join('');
+                const preview = document.getElementById('seq-preview');
+                const attrFloat = document.getElementById('attr-float');
+                const attrIcon = document.getElementById('attr-icon');
+                const attrName = document.getElementById('attr-name');
+
+                // Find potential poem
+                const potential = State.currentTheme.poems.find(p => p.text.startsWith(text));
+                
+                if (potential) {
+                    const elData = ELEMENTS[potential.element];
+                    
+                    preview.innerText = `...${potential.text.substring(text.length)}`;
+                    preview.style.color = elData.color;
+                    preview.style.opacity = 1;
+
+                    // Float UI
+                    if (State.playerSeq.length > 0) {
+                        attrFloat.style.opacity = 1;
+                        attrIcon.style.backgroundColor = elData.color;
+                        attrName.innerText = elData.name;
+                        attrName.style.color = elData.color;
+                    }
+                } else {
+                    preview.style.opacity = 0;
+                    attrFloat.style.opacity = 0;
+                }
+            },
+
+            updateBars() {
+                const pPct = (State.playerHP / State.maxHP) * 100;
+                const aPct = (State.aiHP / State.maxHP) * 100;
+                
+                document.getElementById('hp-bar-p').style.width = pPct + '%';
+                document.getElementById('hp-bar-ai').style.width = aPct + '%';
+                document.getElementById('hp-val-p').innerText = State.playerHP;
+                document.getElementById('hp-val-ai').innerText = State.aiHP;
+
+                // Domain Background Logic
+                const domain = document.getElementById('domain-bg');
+                // Calculate dominant side
+                if (pPct > aPct + 10) {
+                    domain.className = "absolute inset-0 z-0 bg-gradient-to-br from-blue-900 to-black transition-all duration-1000";
+                } else if (aPct > pPct + 10) {
+                    domain.className = "absolute inset-0 z-0 bg-gradient-to-br from-red-900 to-black transition-all duration-1000";
+                } else {
+                    domain.className = "absolute inset-0 z-0 bg-gradient-to-br from-gray-900 to-black transition-all duration-1000";
+                }
+            },
+
+            showToast(msg, color) {
+                const el = document.getElementById('toast');
+                el.innerText = msg;
+                el.style.color = color;
+                el.style.opacity = 1;
+                el.style.transform = "scale(1.1) translateY(0)";
+                
+                setTimeout(() => {
+                    el.style.opacity = 0;
+                    el.style.transform = "scale(0.9) translateY(-20px)";
+                }, 1000);
+            }
+        };
+
+        // Start
+        window.Game = Game; // Expose globally for inline handlers
+        window.onload = () => Game.init();
+    </script>
+</body>
+</html>
